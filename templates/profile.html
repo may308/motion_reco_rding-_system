@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}個人資料 - 運動紀錄系統{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-user me-2"></i>個人資料</h2>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- 編輯個人資料 -->
+        <div class="card card-custom">
+            <div class="card-header">
+                <h5>編輯個人資料</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">用戶名稱</label>
+                                <input type="text" class="form-control" value="{{ user.username }}" readonly>
+                                <small class="form-text text-muted">用戶名稱無法修改</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">體重 (公斤)</label>
+                                <input type="number" class="form-control" name="weight" 
+                                       value="{{ user.weight }}" step="0.1" min="30" max="300" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">註冊時間</label>
+                                <input type="text" class="form-control" 
+                                       value="{{ user.created_at.strftime('%Y/%m/%d %H:%M') }}" readonly>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">會員天數</label>
+                                {% set days_since_registration = (moment.now() - user.created_at).days + 1 %}
+                                <input type="text" class="form-control" 
+                                       value="{{ days_since_registration }} 天" readonly>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>更新資料
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 運動統計 -->
+        <div class="card card-custom mt-4">
+            <div class="card-header">
+                <h5>我的運動統計</h5>
+            </div>
+            <div class="card-body">
+                {% set user_records = user.exercise_records %}
+                <div class="row">
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-primary">{{ user_records|length }}</h4>
+                        <small class="text-muted">總運動次數</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-success">{{ user_records|sum(attribute='calories') }}</h4>
+                        <small class="text-muted">總消耗熱量</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-warning">{{ user_records|sum(attribute='duration') }}</h4>
+                        <small class="text-muted">總運動時間(分鐘)</small>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <h4 class="text-info">
+                            {{ ((user_records|sum(attribute='calories')) / days_since_registration)|round(1) if user_records else 0 }}
+                        </h4>
+                        <small class="text-muted">平均每日消耗</small>
+                    </div>
+                </div>
+                
+                <!-- 最常做的運動 -->
+                <div class="mt-4">
+                    <h6>最常做的運動：</h6>
+                    {% set exercise_counts = {} %}
+                    {% for record in user_records %}
+                        {% if exercise_counts.update({record.exercise_type: exercise_counts.get(record.exercise_type, 0) + 1}) %}{% endif %}
+                    {% endfor %}
+                    
+                    {% if exercise_counts %}
+                        {% set top_exercise = exercise_counts|dictsort(by='value', reverse=true)|first %}
+                        <span class="badge bg-primary">{{ top_exercise[0] }} ({{ top_exercise[1] }}次)</span>
+                    {% else %}
+                        <span class="text-muted">尚無運動記錄</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- 數據備份 -->
+        <div class="card card-custom">
+            <div class="card-header">
+                <h5>數據管理</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">備份和管理您的運動數據</p>
+                <button class="btn btn-success w-100 mb-2" onclick="backupData()">
+                    <i class="fas fa-download me-2"></i>備份數據
+                </button>
+                <button class="btn btn-warning w-100 mb-2" onclick="exportData()">
+                    <i class="fas fa-file-export me-2"></i>匯出數據
+                </button>
+                <button class="btn btn-info w-100" onclick="syncData()">
+                    <i class="fas fa-sync me-2"></i>同步數據
+                </button>
+                
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        數據會自動儲存到瀏覽器本地存儲
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 目標達成情況 -->
+        <div class="card card-custom mt-4">
+            <div class="card-header">
+                <h5>目標達成情況</h5>
+            </div>
+            <div class="card-body">
+                {% set user_goals = user.goals %}
+                {% set completed_goals = user_goals|selectattr('completed', 'equalto', true)|list %}
+                
+                <div class="text-center mb-3">
+                    <h4 class="text-success">{{ completed_goals|length }}</h4>
+                    <small class="text-muted">已完成目標</small>
+                </div>
+                
+                <div class="text-center mb-3">
+                    <h4 class="text-primary">{{ user_goals|length - completed_goals|length }}</h4>
+                    <small class="text-muted">進行中目標</small>
+                </div>
+                
+                {% if user_goals %}
+                    <div class="progress">
+                        {% set completion_rate = (completed_goals|length / user_goals|length) * 100 %}
+                        <div class="progress-bar bg-success" style="width: {{ completion_rate }}%"></div>
+                    </div>
+                    <small class="text-muted">總完成率: {{ completion_rate|round(1) }}%</small>
+                {% else %}
+                    <p class="text-muted">尚未設定任何目標</p>
+                    <a href="{{ url_for('goals') }}" class="btn btn-outline-primary btn-sm">
+                        設定第一個目標
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- 成就徽章 -->
+        <div class="card card-custom mt-4">
+            <div class="card-header">
+                <h5>成就徽章</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <!-- 根據統計數據顯示成就 -->
+                    {% if user_records|length >= 1 %}
+                        <span class="badge bg-primary p-2">
+                            <i class="fas fa-star"></i> 初次運動
+                        </span>
+                    {% endif %}
+                    
+                    {% if user_records|length >= 10 %}
+                        <span class="badge bg-success p-2">
+                            <i class="fas fa-fire"></i> 運動達人
+                        </span>
+                    {% endif %}
+                    
+                    {% if user_records|sum(attribute='calories') >= 1000 %}
+                        <span class="badge bg-warning p-2">
+                            <i class="fas fa-bolt"></i> 熱量殺手
+                        </span>
+                    {% endif %}
+                    
+                    {% if completed_goals|length >= 1 %}
+                        <span class="badge bg-info p-2">
+                            <i class="fas fa-target"></i> 目標達成者
+                        </span>
+                    {% endif %}
+                    
+                    {% if days_since_registration >= 30 %}
+                        <span class="badge bg-secondary p-2">
+                            <i class="fas fa-calendar"></i> 忠實用戶
+                        </span>
+                    {% endif %}
+                    
+                    {% if not (user_records|length >= 1) %}
+                        <p class="text-muted">完成更多運動來獲得成就徽章！</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function backupData() {
+        // 創建備份數據對象
+        const backupData = {
+            user: {
+                username: '{{ user.username }}',
+                weight: {{ user.weight }},
+                created_at: '{{ user.created_at.isoformat() }}'
+            },
+            exercises: {{ user.exercise_records|map(attribute='__dict__')|list|tojson }},
+            goals: {{ user.goals|map(attribute='__dict__')|list|tojson }},
+            timestamp: new Date().toISOString()
+        };
+        
+        // 儲存到 localStorage
+        localStorage.setItem('exercise_backup_{{ user.username }}', JSON.stringify(backupData));
+        
+        showAlert('數據已備份到本地存儲', 'success');
+    }
+
+    function exportData() {
+        // 創建匯出數據
+        const exportData = {
+            user: {
+                username: '{{ user.username }}',
+                weight: {{ user.weight }},
+                created_at: '{{ user.created_at.isoformat() }}'
+            },
+            exercises: {{ user.exercise_records|map(attribute='__dict__')|list|tojson }},
+            goals: {{ user.goals|map(attribute='__dict__')|list|tojson }},
+            export_date: new Date().toISOString()
+        };
+        
+        // 創建下載連結
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `exercise_data_{{ user.username }}_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        URL.revokeObjectURL(url);
+        showAlert('數據已匯出為 JSON 檔案', 'success');
+    }
+
+    function syncData() {
+        // 模擬同步功能
+        const backupKey = 'exercise_backup_{{ user.username }}';
+        const backup = localStorage.getItem(backupKey);
+        
+        if (backup) {
+            showAlert('數據同步完成', 'success');
+        } else {
+            showAlert('找不到本地備份數據，請先進行備份', 'warning');
+        }
+    }
+
+    // 計算 BMI（如果有身高數據的話）
+    function calculateBMI(weight, height) {
+        return weight / ((height / 100) ** 2);
+    }
+</script>
+{% endblock %}

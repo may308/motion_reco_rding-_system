@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}目標管理 - 運動紀錄系統{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-bullseye me-2"></i>目標管理</h2>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- 設定新目標 -->
+        <div class="card card-custom">
+            <div class="card-header">
+                <h5>設定新目標</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">目標類型</label>
+                                <select class="form-select" name="goal_type" required>
+                                    <option value="">請選擇目標類型</option>
+                                    <option value="calories">熱量消耗</option>
+                                    <option value="duration">運動時間</option>
+                                    <option value="frequency">運動次數</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">目標值</label>
+                                <input type="number" class="form-control" name="goal_value" min="1" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">期限</label>
+                                <select class="form-select" name="period" required>
+                                    <option value="daily">每日</option>
+                                    <option value="weekly">每週</option>
+                                    <option value="monthly">每月</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">目標名稱</label>
+                                <input type="text" class="form-control" name="name" required>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>新增目標
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 我的目標列表 -->
+        <div class="card card-custom mt-4">
+            <div class="card-header">
+                <h5>我的目標</h5>
+            </div>
+            <div class="card-body">
+                {% if raw_goals %}
+                    {% for goal in raw_goals %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">{{ goal.name }}</h6>
+                                {% set progress = calculate_goal_progress(goal) %}
+                                <span class="badge {% if progress >= 100 %}bg-success{% else %}bg-primary{% endif %}">
+                                    {% if progress >= 100 %}已完成{% else %}進行中{% endif %}
+                                </span>
+                            </div>
+                            <p class="text-muted mb-2">
+                                {{ get_goal_description(goal) }}
+                            </p>
+                            <div class="progress mb-2">
+                                <div class="progress-bar {% if progress >= 100 %}bg-success{% endif %}"
+                                     style="width: {{ progress }}%"></div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">進度: {{ "%.1f"|format(progress) }}%</small>
+                                <form method="POST" action="{{ url_for('delete_goal', goal_id=goal.id) }}"
+                                      style="display: inline;" onsubmit="return confirm('確定要刪除這個目標嗎？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">刪除</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">尚未設定任何目標</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 目標進度圖表 -->
+    <div class="col-md-4">
+        <div class="card card-custom">
+            <div class="card-header">
+                <h5>目標進度</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="goalProgressChart" height="200"></canvas>
+            </div>
+        </div>
+
+        <!-- 目標建議 -->
+        <div class="card card-custom mt-4">
+            <div class="card-header">
+                <h5>目標建議</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    建議設定具體且可達成的目標！
+                </div>
+                <h6>目標設定小貼士：</h6>
+                <ul class="small text-muted">
+                    <li>從小目標開始，逐步增加</li>
+                    <li>設定具體的數字目標</li>
+                    <li>定期檢視和調整目標</li>
+                    <li>慶祝每一個達成的目標</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadGoalProgressChart();
+    });
+
+    function loadGoalProgressChart() {
+        const goals = {{ goals|tojson }};
+
+        if (goals.length === 0) {
+            const ctx = document.getElementById('goalProgressChart').getContext('2d');
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('尚未設定目標', ctx.canvas.width / 2, ctx.canvas.height / 2);
+            return;
+        }
+
+        const ctx = document.getElementById('goalProgressChart').getContext('2d');
+
+        const labels = goals.map(goal => goal.name);
+        const data = goals.map(goal => Math.min(goal.progress, 120)); // 限制最大值為120%
+        const colors = data.map(value => value >= 100 ? '#28a745' : '#007bff');
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '完成度 (%)',
+                    data: data,
+                    backgroundColor: colors,
+                    borderColor: colors.map(color => color === '#28a745' ? '#1e7e34' : '#0056b3'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 120,
+                        title: {
+                            display: true,
+                            text: '完成度 (%)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+<!-- 在模板中定義輔助函數 -->
+{% set goal_type_names = {
+    'calories': '熱量消耗',
+    'duration': '運動時間',
+    'frequency': '運動次數'
+} %}
+
+{% set period_names = {
+    'daily': '每日',
+    'weekly': '每週',
+    'monthly': '每月'
+} %}
+
+{% set units = {
+    'calories': '大卡',
+    'duration': '分鐘',
+    'frequency': '次'
+} %}
+
+{% macro get_goal_description(goal) %}
+{{ period_names[goal.period] }}{{ goal_type_names[goal.goal_type] }} {{ goal.goal_value }} {{ units[goal.goal_type] }}
+{% endmacro %}
+{% endblock %}

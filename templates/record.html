@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}記錄運動 - 運動紀錄系統{% endblock %}
+
+{% block content %}
+<h2><i class="fas fa-plus-circle me-2"></i>記錄運動</h2>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card card-custom">
+            <div class="card-header">
+                <h5>新增運動記錄</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="exerciseForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">運動類型</label>
+                                <select class="form-select" name="exercise_type" id="exerciseType" 
+                                        onchange="updateCalorieInfo()" required>
+                                    <option value="">請選擇運動類型</option>
+                                    {% for exercise in exercise_types %}
+                                    <option value="{{ exercise }}">{{ exercise }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">運動時間 (分鐘)</label>
+                                <input type="number" class="form-control" name="duration" 
+                                       id="exerciseDuration" min="1" onchange="updateCalorieInfo()" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">心率 (bpm) - 選填</label>
+                                <input type="number" class="form-control" name="heart_rate" 
+                                       id="heartRate" min="50" max="200">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">運動強度</label>
+                                <select class="form-select" name="intensity" id="intensity">
+                                    <option value="低">低強度</option>
+                                    <option value="中" selected>中強度</option>
+                                    <option value="高">高強度</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">備註</label>
+                        <textarea class="form-control" name="notes" id="exerciseNotes" rows="3"></textarea>
+                    </div>
+                    <div class="alert alert-info" id="calorieInfo" style="display: none;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <span id="calorieText"></span>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>儲存記錄
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card card-custom">
+            <div class="card-header">
+                <h5>運動小貼士</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    記住要適度運動，循序漸進！
+                </div>
+                <h6>熱量消耗參考：</h6>
+                <small class="text-muted">
+                    消耗的熱量會根據您的體重、運動類型和時間自動計算。
+                </small>
+                
+                <div class="mt-3">
+                    <h6>運動建議：</h6>
+                    <ul class="small text-muted">
+                        <li>每週至少150分鐘中等強度運動</li>
+                        <li>運動前後記得暖身和伸展</li>
+                        <li>補充足夠水分</li>
+                        <li>循序漸進增加運動量</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 運動數據參考表
+    const exerciseData = {
+        {% for exercise, rate in [
+            ('慢走(4公里/小時)', 3.5),
+            ('快走、健走(6.0公里/小時)', 5.5),
+            ('下樓梯', 3.2),
+            ('上樓梯', 8.4),
+            ('慢跑(8公里/小時)', 8.2),
+            ('快跑(12公里/小時)', 12.7),
+            ('快跑(16公里/小時)', 16.8),
+            ('騎腳踏車(一般速度，10公里/小時)', 4),
+            ('騎腳踏車(快，20公里/小時)', 8.4),
+            ('騎腳踏車(很快，30公里/小時)', 12.6),
+            ('拖地', 3.7),
+            ('園藝', 4.2),
+            ('使用工具製造或修理(如水電工)', 5.3),
+            ('耕種、牧場、漁業、林業', 7.4),
+            ('搬運重物', 8.4),
+            ('瑜珈', 3),
+            ('跳舞(慢)、元極舞', 3.1),
+            ('跳舞(快)、國際標準舞', 5.3),
+            ('飛盤', 3.2),
+            ('排球', 3.6),
+            ('保齡球', 3.6),
+            ('太極拳', 4.2),
+            ('乒乓球', 4.2),
+            ('棒壘球', 4.7),
+            ('高爾夫', 5),
+            ('溜直排輪', 5.1),
+            ('羽毛球', 5.1),
+            ('遊泳(慢)', 6.3),
+            ('遊泳(較快)', 10),
+            ('籃球(半場)', 6.3),
+            ('籃球(全場)', 8.3),
+            ('有氧舞蹈', 6.8),
+            ('網球', 6.6),
+            ('足球', 7.7),
+            ('跳繩(慢)', 8.4),
+            ('跳繩(快)', 12.6)
+        ] %}
+        '{{ exercise }}': {{ rate }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
+
+    // 假設用戶體重（從session獲取）
+    const userWeight = {{ session.get('user_weight', 70) }};
+
+    function updateCalorieInfo() {
+        const exerciseType = document.getElementById('exerciseType').value;
+        const duration = document.getElementById('exerciseDuration').value;
+        
+        if (exerciseType && duration) {
+            const calorieRate = exerciseData[exerciseType];
+            if (calorieRate) {
+                const calories = Math.round(calorieRate * userWeight * (duration / 60));
+                
+                document.getElementById('calorieInfo').style.display = 'block';
+                document.getElementById('calorieText').textContent = 
+                    `預估將消耗 ${calories} 大卡熱量`;
+            }
+        } else {
+            document.getElementById('calorieInfo').style.display = 'none';
+        }
+    }
+
+    // 表單提交成功後清空
+    document.getElementById('exerciseForm').addEventListener('submit', function(e) {
+        // 讓表單正常提交
+        setTimeout(() => {
+            if (!document.querySelector('.alert-danger')) {
+                // 如果沒有錯誤訊息，清空表單
+                this.reset();
+                document.getElementById('calorieInfo').style.display = 'none';
+            }
+        }, 100);
+    });
+</script>
+{% endblock %}
